@@ -2,10 +2,10 @@
 
 import { Button } from "./ui/button";
 import Image from "next/image";
-import { useState } from "react";
+import * as React from "react";
 
 export default function ImageTabs() {
-  const [activeTab, setActiveTab] = useState("organize"); // organize, hired, boards
+  const [activeTab, setActiveTab] = React.useState("organize"); // organize, hired, boards
 
   return (
     <section className="border-t bg-white py-16">
