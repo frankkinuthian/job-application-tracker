@@ -40,6 +40,8 @@ export async function getSession() {
 }
 
 export async function signOut() {
+  "use server";
+
   const result = await auth.api.signOut({
     headers: await headers(),
   });
