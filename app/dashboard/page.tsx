@@ -1,6 +1,30 @@
 import { getSession } from "@/lib/auth";
+import connectDB from "@/lib/database";
 import { initializeUserBoard } from "@/lib/database/functions/init-board-user";
+import { Board } from "@/lib/models";
 import { redirect } from "next/navigation";
+
+async function getBoard(userId: string) {
+  "use cache";
+
+  await connectDB();
+
+  const boardDoc = await Board.findOne({
+    userId: userId,
+    name: "Job Hunt",
+  }).populate({
+    path: "columns",
+    populate: {
+      path: "jobApplications",
+    },
+  });
+
+  if (!boardDoc) return null;
+
+  const board = JSON.parse(JSON.stringify(boardDoc));
+
+  return board;
+}
 
 const DashboardPage = async () => {
   const session = await getSession();
