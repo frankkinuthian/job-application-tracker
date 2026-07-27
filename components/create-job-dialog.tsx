@@ -39,12 +39,14 @@ export default function CreateJobApplicationDialog({
   boardId,
 }: CreateJobApplicationDialogProps) {
   const [open, setOpen] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
 
-    const { data: result, error } = await tryCatch(
+    const { data: result, error: thrown } = await tryCatch(
       createJobApplication({
         ...formData,
         columnId,
@@ -56,10 +58,15 @@ export default function CreateJobApplicationDialog({
       }),
     );
 
-    if (error || result?.error) {
-      console.error(
-        "Failed to create job application:",
-        error ?? result?.error,
+    if (thrown || result?.error) {
+      // Only the action's own message is safe to show verbatim; a thrown error
+      // could carry internals, so log it and show something generic.
+      if (!result?.error) {
+        console.error("Failed to create job application:", thrown);
+      }
+
+      setError(
+        result?.error ?? "Couldn't add this application. Please try again.",
       );
       return;
     }
@@ -69,7 +76,13 @@ export default function CreateJobApplicationDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setError(null);
+      }}
+    >
       <DialogTrigger
         render={
           <Button
@@ -88,6 +101,14 @@ export default function CreateJobApplicationDialog({
         </DialogHeader>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-4">
+            {error && (
+              <div
+                role="alert"
+                className="rounded-md bg-destructive/15 p-3 text-sm text-destructive"
+              >
+                {error}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="company">Company *</Label>

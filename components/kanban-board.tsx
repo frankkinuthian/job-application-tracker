@@ -21,6 +21,8 @@ import { Button } from "./ui/button";
 import CreateJobApplicationDialog from "./create-job-dialog";
 import JobApplicationCard from "./job-application-card";
 import { useBoard } from "@/lib/hooks/use-boards";
+import { deleteColumn } from "@/lib/actions/columns";
+import { tryCatch } from "@/lib/helpers/tryCatch";
 import {
   closestCorners,
   DndContext,
@@ -83,6 +85,9 @@ function DroppableColumn({
   boardId: string;
   sortedColumns: Column[];
 }) {
+  const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const { setNodeRef, isOver } = useDroppable({
     id: column._id,
     data: {
@@ -95,6 +100,27 @@ function DroppableColumn({
   const sortedJobs = [...(column.jobApplications || [])].sort(
     (a, b) => a.order - b.order,
   );
+
+  async function handleDeleteColumn() {
+    setError(null);
+    setIsDeleting(true);
+
+    const { data: result, error: thrown } = await tryCatch(
+      deleteColumn(column._id),
+    );
+
+    if (thrown || result?.error) {
+      if (!result?.error) {
+        console.error("Failed to delete column:", thrown);
+      }
+
+      setError(
+        result?.error ?? "Couldn't delete this column. Please try again.",
+      );
+    }
+
+    setIsDeleting(false);
+  }
   return (
     <Card className="min-w-75 shrink-0 shadow-md p-0">
       <CardHeader
@@ -121,14 +147,35 @@ function DroppableColumn({
               <MoreVertical className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem
+                className="text-destructive"
+                disabled={isDeleting}
+                onClick={handleDeleteColumn}
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Delete Column
+                {isDeleting ? "Deleting..." : "Delete Column"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </CardHeader>
+
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-2 bg-destructive/15 px-3 py-2 text-xs text-destructive"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+            className="shrink-0 font-medium underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <CardContent
         ref={setNodeRef}

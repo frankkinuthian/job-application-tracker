@@ -39,6 +39,7 @@ export default function JobApplicationCard({
   dragHandleProps,
 }: JobApplicationCardProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     company: job.company,
     position: job.position,
@@ -51,10 +52,26 @@ export default function JobApplicationCard({
     description: job.description || "",
   });
 
+  /**
+   * Server actions fail in two ways: they throw on infrastructure problems and
+   * return `{ error }` for expected ones like "Unauthorized". Both need to reach
+   * the user, but only the returned message is safe to show verbatim.
+   */
+  function describeFailure(
+    thrown: unknown,
+    returned: string | undefined,
+    fallback: string,
+  ) {
+    if (returned) return returned;
+    console.error(fallback, thrown);
+    return fallback;
+  }
+
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
 
-    const { data: result, error } = await tryCatch(
+    const { data: result, error: thrown } = await tryCatch(
       updateJobApplication(job._id, {
         ...formData,
         tags: formData.tags
@@ -64,10 +81,13 @@ export default function JobApplicationCard({
       }),
     );
 
-    if (error || result?.error) {
-      console.error(
-        "Failed to update job application:",
-        error ?? result?.error,
+    if (thrown || result?.error) {
+      setError(
+        describeFailure(
+          thrown,
+          result?.error,
+          "Couldn't save your changes. Please try again.",
+        ),
       );
       return;
     }
@@ -76,27 +96,40 @@ export default function JobApplicationCard({
   }
 
   async function handleDelete() {
-    const { data: result, error } = await tryCatch(
+    setError(null);
+
+    const { data: result, error: thrown } = await tryCatch(
       deleteJobApplication(job._id),
     );
 
-    if (error || result?.error) {
-      console.error(
-        "Failed to delete job application:",
-        error ?? result?.error,
+    if (thrown || result?.error) {
+      setError(
+        describeFailure(
+          thrown,
+          result?.error,
+          "Couldn't delete this application. Please try again.",
+        ),
       );
     }
   }
 
   async function handleMove(newColumnId: string) {
-    const { data: result, error } = await tryCatch(
+    setError(null);
+
+    const { data: result, error: thrown } = await tryCatch(
       updateJobApplication(job._id, {
         columnId: newColumnId,
       }),
     );
 
-    if (error || result?.error) {
-      console.error("Failed to move job application:", error ?? result?.error);
+    if (thrown || result?.error) {
+      setError(
+        describeFailure(
+          thrown,
+          result?.error,
+          "Couldn't move this application. Please try again.",
+        ),
+      );
     }
   }
   return (
@@ -106,6 +139,22 @@ export default function JobApplicationCard({
         {...dragHandleProps}
       >
         <CardContent className="p-4">
+          {error && !isEditing && (
+            <div
+              role="alert"
+              className="mb-2 flex items-start justify-between gap-2 rounded-md bg-destructive/15 p-2 text-xs text-destructive"
+            >
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                aria-label="Dismiss error"
+                className="shrink-0 font-medium underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-sm mb-1">{job.position}</h3>
@@ -155,7 +204,12 @@ export default function JobApplicationCard({
                   <MoreVertical className="h-4 w-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setError(null);
+                      setIsEditing(true);
+                    }}
+                  >
                     <Edit2 className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
@@ -187,14 +241,30 @@ export default function JobApplicationCard({
         </CardContent>
       </Card>
 
-      <Dialog open={isEditing} onOpenChange={setIsEditing}>
+      <Dialog
+        open={isEditing}
+        onOpenChange={(open) => {
+          setIsEditing(open);
+          if (!open) setError(null);
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Job Application</DialogTitle>
-            <DialogDescription>Track a new job application</DialogDescription>
+            <DialogTitle>Edit Job Application</DialogTitle>
+            <DialogDescription>
+              Update the details of this application
+            </DialogDescription>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleUpdate}>
             <div className="space-y-4">
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-md bg-destructive/15 p-3 text-sm text-destructive"
+                >
+                  {error}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="company">Company *</Label>

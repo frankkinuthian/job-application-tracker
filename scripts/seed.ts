@@ -2,6 +2,7 @@ import connectDB from "@/lib/database";
 import "@/lib/models";
 import { Board, Column, JobApplication } from "@/lib/models";
 import { ORDER_STEP } from "@/lib/helpers/fractional-order";
+import { statusFromColumnName } from "@/lib/helpers/board-status";
 
 // The only user currently in the dev database. Override to seed someone else:
 //   SEED_USER_ID=<id> pnpm seed
@@ -247,7 +248,7 @@ async function seed() {
           columnId: columnId,
           boardId: board._id,
           userId: USER_ID,
-          status: columnName.toLowerCase().replace(" ", "-"),
+          status: statusFromColumnName(columnName),
           // Fractional sort keys: leave room to insert between neighbours.
           order: (i + 1) * ORDER_STEP,
         });
