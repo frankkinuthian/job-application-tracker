@@ -25,14 +25,18 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Environment
 
-Create a `.env` in the project root:
+Copy `.env.example` to `.env` and fill it in:
 
 ```bash
-MONGODB_URI=          # mongodb+srv connection string
-BETTER_AUTH_SECRET=   # random 32+ char string
-BETTER_AUTH_URL=      # http://localhost:3000 in development
-SEED_USER_ID=         # optional, see Seeding
+cp .env.example .env
 ```
+
+| Variable             | Notes                                                      |
+| -------------------- | ---------------------------------------------------------- |
+| `MONGODB_URI`        | Atlas connection string. Required at build time            |
+| `BETTER_AUTH_SECRET` | Random 32+ character string, unique per environment        |
+| `BETTER_AUTH_URL`    | `http://localhost:3000` locally, full domain in production |
+| `SEED_USER_ID`       | Optional, see Seeding                                      |
 
 `.env` is gitignored and holds live credentials. Keep it out of version control.
 
@@ -136,6 +140,24 @@ lib/
 scripts/seed.ts      sample data
 proxy.ts             optimistic redirects
 ```
+
+## Deploying
+
+Set every variable from `.env.example` in the Vercel project's Environment
+Variables, for each environment you build (Production, Preview, Development).
+
+`MONGODB_URI` is needed at **build** time, not just at runtime. `lib/auth/index.ts`
+constructs a `MongoClient` at module scope, and `NavBar` in the root layout
+imports it, so Next evaluates the module while collecting page data. Without the
+variable the build fails during page collection rather than at request time.
+
+Two other things to check on a first deploy:
+
+- `BETTER_AUTH_URL` must be the deployed `https://` domain. Leaving it as
+  localhost breaks auth callbacks.
+- Atlas network access must allow Vercel's serverless IPs. Either allowlist
+  `0.0.0.0/0` or use the Vercel–Atlas integration. A build can succeed while
+  every query times out if this is missed.
 
 ## Known gaps
 

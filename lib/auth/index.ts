@@ -5,7 +5,19 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { initializeUserBoard } from "../database/functions/init-board-user";
 
-const client = new MongoClient(process.env.MONGODB_URI!, {
+// This module is evaluated at build time (NavBar sits in the root layout, so
+// Next imports it while collecting page data), which means MONGODB_URI has to
+// be present in the build environment, not just at runtime. Fail with a
+// readable message instead of a `startsWith` TypeError from the driver.
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error(
+    "Missing MONGODB_URI. Set it in .env locally, and in the Vercel project's Environment Variables for every environment you build (Production, Preview, Development).",
+  );
+}
+
+const client = new MongoClient(MONGODB_URI, {
   serverSelectionTimeoutMS: 5000,
 });
 const db = client.db();
