@@ -58,7 +58,6 @@ export async function initializeUserBoard(
           name: col.name,
           order: col.order,
           boardId: board._id,
-          jobApplications: [],
         }),
       ),
     ),

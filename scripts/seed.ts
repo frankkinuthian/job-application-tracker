@@ -1,6 +1,7 @@
 import connectDB from "@/lib/database";
 import "@/lib/models";
 import { Board, Column, JobApplication } from "@/lib/models";
+import { ORDER_STEP } from "@/lib/helpers/fractional-order";
 
 // The only user currently in the dev database. Override to seed someone else:
 //   SEED_USER_ID=<id> pnpm seed
@@ -205,19 +206,14 @@ async function seed() {
       columnMap[col.name] = col._id.toString();
     });
 
-    // Clear existing job applications for this user
+    // Clear existing job applications for this user. Column membership lives on
+    // the job documents, so deleting them is all that's needed.
     const existingJobs = await JobApplication.find({ userId: USER_ID });
     if (existingJobs.length > 0) {
       console.log(
         `🗑️  Deleting ${existingJobs.length} existing job applications...`,
       );
       await JobApplication.deleteMany({ userId: USER_ID });
-
-      // Clear job applications from columns
-      for (const column of columns) {
-        column.jobApplications = [];
-        await column.save();
-      }
     }
 
     // Distribute jobs across columns
@@ -238,12 +234,9 @@ async function seed() {
         continue;
       }
 
-      const column = columns.find((c) => c.name === columnName);
-      if (!column) continue;
-
       for (let i = 0; i < jobs.length; i++) {
         const jobData = jobs[i];
-        const jobApplication = await JobApplication.create({
+        await JobApplication.create({
           company: jobData.company,
           position: jobData.position,
           location: jobData.location,
@@ -255,16 +248,13 @@ async function seed() {
           boardId: board._id,
           userId: USER_ID,
           status: columnName.toLowerCase().replace(" ", "-"),
-          // Match the 100-spacing that updateJobApplication assumes when it
-          // shifts neighbours by +/-100. Unit spacing corrupts the order.
-          order: i * 100,
+          // Fractional sort keys: leave room to insert between neighbours.
+          order: (i + 1) * ORDER_STEP,
         });
 
-        column.jobApplications.push(jobApplication._id);
         totalCreated++;
       }
 
-      await column.save();
       console.log(`✅ Added ${jobs.length} jobs to "${columnName}" column`);
     }
 

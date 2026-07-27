@@ -1,12 +1,22 @@
 import { getSession } from "@/lib/auth";
 import connectDB from "@/lib/database";
-import { Board } from "@/lib/models";
+import { Board, Column, JobApplication } from "@/lib/models";
+import type {
+  Board as BoardDTO,
+  Column as ColumnDTO,
+  JobApplication as JobApplicationDTO,
+} from "@/lib/models/model-types";
 import { redirect } from "next/navigation";
 import KanbanBoard from "@/components/kanban-board";
 import { Suspense } from "react";
 import { LoaderOne } from "@/components/ui/loader";
 
-async function getBoard(userId: string) {
+/**
+ * Assembles the board the client needs: columns in order, each with its cards
+ * in order. Card membership comes from JobApplication.columnId (indexed), not
+ * from a ref array on the column, so the two sides can't drift apart.
+ */
+async function getBoard(userId: string): Promise<BoardDTO | null> {
   "use cache";
 
   await connectDB();
@@ -14,18 +24,57 @@ async function getBoard(userId: string) {
   const boardDoc = await Board.findOne({
     userId: userId,
     name: "Job Hunt",
-  }).populate({
-    path: "columns",
-    populate: {
-      path: "jobApplications",
-    },
-  });
+  }).lean();
 
   if (!boardDoc) return null;
 
-  const board = JSON.parse(JSON.stringify(boardDoc));
+  const [columnDocs, jobDocs] = await Promise.all([
+    Column.find({ boardId: boardDoc._id }).sort({ order: 1 }).lean(),
+    JobApplication.find({ boardId: boardDoc._id }).sort({ order: 1 }).lean(),
+  ]);
 
-  return board;
+  // Bucket cards by column. Both queries are already sorted, so each bucket
+  // comes out in order.
+  const jobsByColumn = new Map<string, JobApplicationDTO[]>();
+
+  for (const job of jobDocs) {
+    const key = String(job.columnId);
+    const dto: JobApplicationDTO = {
+      _id: String(job._id),
+      company: job.company,
+      position: job.position,
+      location: job.location,
+      status: job.status,
+      notes: job.notes,
+      salary: job.salary,
+      jobUrl: job.jobUrl,
+      order: job.order,
+      columnId: key,
+      tags: job.tags,
+      description: job.description,
+    };
+
+    const bucket = jobsByColumn.get(key);
+
+    if (bucket) {
+      bucket.push(dto);
+    } else {
+      jobsByColumn.set(key, [dto]);
+    }
+  }
+
+  const columns: ColumnDTO[] = columnDocs.map((col) => ({
+    _id: String(col._id),
+    name: col.name,
+    order: col.order,
+    jobApplications: jobsByColumn.get(String(col._id)) ?? [],
+  }));
+
+  return {
+    _id: String(boardDoc._id),
+    name: boardDoc.name,
+    columns,
+  };
 }
 
 async function DashboardPage() {

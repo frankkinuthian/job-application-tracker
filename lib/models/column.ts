@@ -4,12 +4,13 @@ export interface IColumn extends Document {
   name: string;
   boardId: mongoose.Types.ObjectId;
   order: number;
-  jobApplications: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Board -> Columns -> JobApplications
+// Board -> Columns, and JobApplication.columnId points back at its column.
+// Membership is derived from that field rather than a ref array on the column,
+// so moving a card is a single write and the two sides can't drift apart.
 
 const ColumnSchema = new Schema<IColumn>(
   {
@@ -28,12 +29,6 @@ const ColumnSchema = new Schema<IColumn>(
       required: true,
       default: 0,
     },
-    jobApplications: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: "JobApplication",
-      },
-    ],
   },
   {
     timestamps: true,
