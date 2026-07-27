@@ -109,10 +109,21 @@ Deleting `proxy.ts` would not expose any data.
 ### Cache Components
 
 `cacheComponents: true` is enabled in `next.config.ts`, which the `"use cache"`
-directive in `getBoard` requires. The consequence is that any component reading
-request-time data must sit inside a `<Suspense>` boundary, which is why `NavBar`
-is wrapped in `app/layout.tsx` with a static `NavBarShell` fallback. All routes
-partial-prerender as a result.
+directive in `getBoardData` requires. The consequence is that any component
+reading request-time data must sit inside a `<Suspense>` boundary, which is why
+`NavBar` is wrapped in `app/layout.tsx` with a static `NavBarShell` fallback. All
+routes partial-prerender as a result.
+
+The dashboard read is split deliberately. `resolveBoard(userId)` is **uncached**:
+it finds the board and creates one if the signup hook never did. `getBoardData(boardId)`
+is cached and tagged `board:<id>`. Keying the cached half on `boardId` means the
+"no board yet" state is never cacheable, which is what makes the recovery above
+work at all.
+
+Mutations invalidate with `updateTag(boardTag(boardId))` rather than
+`revalidatePath` alone. Under Cache Components, `revalidateTag` requires a
+cache-life profile argument; `updateTag` is the server-action form and gives
+read-your-own-writes semantics.
 
 ### Error handling
 
@@ -128,13 +139,13 @@ before an optimistic move and restores it if either channel reports failure.
 app/
   (auth)/            sign-in, sign-up
   api/auth/[...all]/ Better Auth handler
-  dashboard/         board page, getBoard query
+  dashboard/         board page, resolveBoard + cached getBoardData
 components/          KanbanBoard, cards, dialogs, ui/ primitives
 lib/
-  actions/           server actions (create/update/delete cards)
+  actions/           server actions (cards, columns)
   auth/              Better Auth server + client config
   database/          connection cache, board init, card positioning
-  helpers/           tryCatch, fractional ordering
+  helpers/           tryCatch, fractional ordering, status/cache tags
   hooks/             useBoard (optimistic state)
   models/            Mongoose schemas + client DTO types
 scripts/seed.ts      sample data
@@ -158,17 +169,21 @@ Two other things to check on a first deploy:
 - Atlas network access must allow Vercel's serverless IPs. Either allowlist
   `0.0.0.0/0` or use the Vercel–Atlas integration. A build can succeed while
   every query times out if this is missed.
+- Point production at its own database. The default `MONGODB_URI` here targets
+  `job-board-dev`, and `pnpm seed` deletes every card for the seeded user, so
+  sharing one database between local and production means seeding wipes real
+  data.
 
 ## Known gaps
 
-- Board creation happens only in the Better Auth signup hook. If it fails, the
-  hook logs and signup still succeeds, but the user lands on a dashboard with no
-  board and no recovery path. Lazy initialization on dashboard read would close
-  this.
 - Cross-column moves are atomic (one write), but renormalization is a
   `bulkWrite` that isn't wrapped in a transaction. It is idempotent, so a retry
   converges.
-- Moving a card between columns does not update its `status` field.
-- Card edit, delete, and move-menu failures log to the console rather than
-  surfacing in the UI. Only drag failures show a message.
-- Column create and delete are not implemented; the delete menu item is inert.
+- Creating a column is not implemented. Deleting one is, but only when it's
+  empty, which means a column removed by accident can't be recreated from the
+  UI. `deleteColumn` also refuses to remove the last remaining column for the
+  same reason.
+- `status` is derived from the column name, so renaming a column (no UI for this
+  yet) would leave existing cards with a stale status.
+- No tests. Behaviour has been verified by driving the data layer against a real
+  database, but nothing guards against regressions.
