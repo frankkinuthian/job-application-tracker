@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { NavBar } from "@/components/NavBar";
+import { NavBar, NavBarShell } from "@/components/NavBar";
+import { Suspense } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,7 +30,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <NavBar />
+        {/* NavBar reads the session, so it must stream inside Suspense
+            now that cacheComponents is enabled. */}
+        <Suspense fallback={<NavBarShell />}>
+          <NavBar />
+        </Suspense>
         {children}
       </body>
     </html>

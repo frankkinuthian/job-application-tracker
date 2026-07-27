@@ -1,8 +1,10 @@
 import { getSession } from "@/lib/auth";
 import connectDB from "@/lib/database";
-import { initializeUserBoard } from "@/lib/database/functions/init-board-user";
 import { Board } from "@/lib/models";
 import { redirect } from "next/navigation";
+import KanbanBoard from "@/components/kanban-board";
+import { Suspense } from "react";
+import { LoaderOne } from "@/components/ui/loader";
 
 async function getBoard(userId: string) {
   "use cache";
@@ -26,29 +28,25 @@ async function getBoard(userId: string) {
   return board;
 }
 
-const DashboardPage = async () => {
+async function DashboardPage() {
   const session = await getSession();
 
-  if (!session) {
+  if (!session?.user) {
     redirect("/sign-in");
   }
 
-  // Idempotent: returns the existing board, or creates one if the
-  // post-signup hook failed to.
-  const { data: board, error } = await initializeUserBoard(session.user.id);
+  const board = await getBoard(session.user.id);
 
-  if (error) {
-    console.error(`Failed to load board for user ${session.user.id}:`, error);
-
+  if (!board) {
     return (
       <div className="container mx-auto px-4 py-16">
         <div className="mx-auto max-w-md rounded-md bg-destructive/15 p-4 text-center">
           <h1 className="mb-2 text-lg font-semibold text-destructive">
-            We couldn&apos;t load your board
+            We couldn&apos;t find your board
           </h1>
           <p className="text-sm text-gray-700">
-            Something went wrong reaching the database. Refresh the page to try
-            again.
+            Your board hasn&apos;t been set up yet. Try signing out and back in,
+            or refresh the page.
           </p>
         </div>
       </div>
@@ -56,10 +54,28 @@ const DashboardPage = async () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-black">{board.name}</h1>
+    <div className="min-h-screen bg-white">
+      <div className="container mx-auto p-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-black">Job Hunt</h1>
+          <p className="text-gray-600">Track your job applications</p>
+        </div>
+        <KanbanBoard board={board} userId={session.user.id} />
+      </div>
     </div>
   );
-};
+}
 
-export default DashboardPage;
+export default async function Dashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center items-center min-h-100">
+          <LoaderOne />
+        </div>
+      }
+    >
+      <DashboardPage />
+    </Suspense>
+  );
+}
