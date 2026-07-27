@@ -3,6 +3,7 @@ import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { MongoClient } from "mongodb";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { initializeUserBoard } from "../database/functions/init-board-user";
 
 const client = new MongoClient(process.env.MONGODB_URI!, {
   serverSelectionTimeoutMS: 5000,
@@ -22,8 +23,17 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user) => {
-          if (user.id) {
-            // await initializeUserBoard(user.id);
+          if (!user.id) return;
+
+          const { error } = await initializeUserBoard(user.id);
+
+          if (error) {
+            // Don't fail signup: the account exists, the board can be
+            // created lazily on the next dashboard visit.
+            console.error(
+              `Failed to initialize board for user ${user.id}:`,
+              error,
+            );
           }
         },
       },
